@@ -1,0 +1,6 @@
+<resources>
+    <color name="black">#000000</color>
+    <color name="rls_background">#010736</color>
+    <color name="rls_surface">#0D1C42</color>
+    <color name="rls_cream">#FCF1D0</color>
+</resources>
