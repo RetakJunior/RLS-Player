@@ -86,11 +86,14 @@ class RlsPlaybackService : MediaSessionService() {
                 controller: MediaSession.ControllerInfo
             ): MediaSession.ConnectionResult {
                 val connectionResult = super.onConnect(session, controller)
-                val sessionCommands = connectionResult.availableSessionCommands.buildUpon()
+                val availableSessionCommands = connectionResult.availableSessionCommands.buildUpon()
                     .add(SessionCommand(ACTION_SHUFFLE, Bundle.EMPTY))
                     .add(SessionCommand(ACTION_REPEAT, Bundle.EMPTY))
                     .build()
-                return MediaSession.ConnectionResult.accept(sessionCommands, connectionResult.availablePlayerCommands)
+                return MediaSession.ConnectionResult.accept(
+                    availableSessionCommands,
+                    connectionResult.availablePlayerCommands
+                )
             }
 
             override fun onCustomCommand(
@@ -102,7 +105,6 @@ class RlsPlaybackService : MediaSessionService() {
                 when (customCommand.customAction) {
                     ACTION_SHUFFLE -> {
                         player.shuffleModeEnabled = !player.shuffleModeEnabled
-                        updateNotificationLayout()
                     }
                     ACTION_REPEAT -> {
                         player.repeatMode = when (player.repeatMode) {
@@ -110,9 +112,9 @@ class RlsPlaybackService : MediaSessionService() {
                             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                             else -> Player.REPEAT_MODE_OFF
                         }
-                        updateNotificationLayout()
                     }
                 }
+                updateNotificationLayout()
                 return com.google.common.util.concurrent.Futures.immediateFuture(
                     androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS)
                 )
@@ -131,15 +133,18 @@ class RlsPlaybackService : MediaSessionService() {
     }
 
     private fun updateNotificationLayout() {
+        val shuffleIcon = if (player.shuffleModeEnabled) R.drawable.ic_shuffle else R.drawable.ic_music_note
+        val repeatIcon = if (player.repeatMode != Player.REPEAT_MODE_OFF) R.drawable.ic_repeat else R.drawable.ic_music_note
+
         val shuffleButton = CommandButton.Builder()
             .setSessionCommand(SessionCommand(ACTION_SHUFFLE, Bundle.EMPTY))
-            .setIconResId(if (player.shuffleModeEnabled) R.drawable.ic_shuffle else R.drawable.ic_music_note) // Fallback if needed
+            .setIconResId(shuffleIcon)
             .setDisplayName("Karıştır")
             .build()
 
         val repeatButton = CommandButton.Builder()
             .setSessionCommand(SessionCommand(ACTION_REPEAT, Bundle.EMPTY))
-            .setIconResId(if (player.repeatMode != Player.REPEAT_MODE_OFF) R.drawable.ic_repeat else R.drawable.ic_music_note)
+            .setIconResId(repeatIcon)
             .setDisplayName("Tekrar")
             .build()
 

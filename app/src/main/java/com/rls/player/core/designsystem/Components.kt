@@ -12,10 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.rls.player.core.domain.model.Song
 import java.util.concurrent.TimeUnit
 
@@ -34,11 +36,14 @@ fun AlbumArtImage(
         Icon(
             imageVector = Icons.Outlined.MusicNote,
             contentDescription = null,
-            tint = MutedCream,
-            modifier = Modifier.size(24.dp)
+            tint = MutedCream.copy(alpha = 0.5f),
+            modifier = Modifier.size(20.dp)
         )
         AsyncImage(
-            model = "content://media/external/audio/albumart/$albumId",
+            model = ImageRequest.Builder(LocalContext.current)
+                .data("content://media/external/audio/albumart/$albumId")
+                .crossfade(true)
+                .build(),
             contentDescription = contentDescription,
             contentScale = ContentScale.Crop,
             modifier = Modifier.matchParentSize()

@@ -44,7 +44,7 @@ class LibraryViewModel @Inject constructor(
     private val message = MutableStateFlow<String?>(null)
 
     private val filteredAndSortedSongs = combine(
-        getSongs(),
+        getSongs().distinctUntilChanged(),
         query,
         sort
     ) { rawSongs, currentQuery, currentSort ->
@@ -63,16 +63,18 @@ class LibraryViewModel @Inject constructor(
             SongSort.DATE_ADDED -> filtered.sortedByDescending { it.dateAdded }
             SongSort.DURATION -> filtered.sortedByDescending { it.durationMs }
         }
-    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
+    }
+        .flowOn(kotlinx.coroutines.Dispatchers.Default)
+        .distinctUntilChanged()
 
     val state: StateFlow<LibraryUiState> = combine(
         filteredAndSortedSongs,
-        music.albums(),
-        music.artists(),
-        music.folders(),
-        collection.favorites(),
-        collection.recent(),
-        collection.playlists(),
+        music.albums().distinctUntilChanged(),
+        music.artists().distinctUntilChanged(),
+        music.folders().distinctUntilChanged(),
+        collection.favorites().distinctUntilChanged(),
+        collection.recent().distinctUntilChanged(),
+        collection.playlists().distinctUntilChanged(),
         query,
         sort,
         scanning,

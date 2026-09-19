@@ -62,8 +62,6 @@ fun RlsApp(
     player: PlayerViewModel = viewModel(),
     settings: SettingsViewModel = viewModel()
 ) {
-    val libraryState by library.state.collectAsStateWithLifecycle()
-    val playerState by player.state.collectAsStateWithLifecycle()
     val settingsState by settings.state.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableStateOf(Tab.SONGS) }
@@ -84,26 +82,6 @@ fun RlsApp(
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         granted = isGranted
         if (isGranted) library.rescan()
-    }
-
-    LaunchedEffect(granted) {
-        if (granted && libraryState.songs.isEmpty() && !libraryState.scanning) {
-            library.rescan()
-        }
-    }
-
-    libraryState.message?.let { msg ->
-        LaunchedEffect(msg) {
-            delay(2800)
-            library.consumeMessage()
-        }
-        Snackbar(
-            modifier = Modifier.padding(16.dp),
-            containerColor = SurfaceSelected,
-            contentColor = Cream
-        ) {
-            Text(msg)
-        }
     }
 
     if (!granted) {
@@ -133,57 +111,97 @@ fun RlsApp(
                 )
             },
             bottomBar = {
-                Column {
-                    if (playerState.song != null) {
-                        MiniPlayerBar(
-                            state = playerState,
-                            onTogglePlay = player::togglePlay,
-                            onNext = player::next,
-                            onToggleShuffle = player::toggleShuffle,
-                            onCycleRepeat = player::cycleRepeat,
-                            onOpenPlayer = { showPlayer = true }
-                        )
-                    }
-                    NavigationBar(
-                        containerColor = Surface,
-                        tonalElevation = 0.dp
-                    ) {
-                        Tab.entries.forEach { item ->
-                            NavigationBarItem(
-                                selected = tab == item,
-                                onClick = { tab = item },
-                                icon = { Icon(tabIcon(item), item.label) },
-                                label = { Text(item.label) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Night,
-                                    selectedTextColor = Cream,
-                                    indicatorColor = Cream,
-                                    unselectedIconColor = MutedCream,
-                                    unselectedTextColor = MutedCream
-                                )
-                            )
-                        }
-                    }
-                }
+                AppBottomBar(
+                    tab = tab,
+                    onTabSelected = { tab = it },
+                    player = player,
+                    onOpenPlayer = { showPlayer = true }
+                )
             }
         ) { padding ->
-            LibraryContent(
-                tab = tab,
-                state = libraryState,
-                playerState = playerState,
-                player = player,
-                library = library,
-                modifier = Modifier.padding(padding)
-            )
+            val libraryState by library.state.collectAsStateWithLifecycle()
+            val playerState by player.state.collectAsStateWithLifecycle()
+
+            val libraryContent = remember(tab, libraryState, playerState.song?.id) {
+                movableContentOf {
+                    LibraryContent(
+                        tab = tab,
+                        state = libraryState,
+                        playerState = playerState,
+                        player = player,
+                        library = library,
+                        modifier = Modifier.padding(padding)
+                    )
+                }
+            }
+
+            libraryContent()
+
+            libraryState.message?.let { msg ->
+                LaunchedEffect(msg) {
+                    delay(2800)
+                    library.consumeMessage()
+                }
+                Snackbar(
+                    modifier = Modifier.padding(16.dp),
+                    containerColor = SurfaceSelected,
+                    contentColor = Cream
+                ) {
+                    Text(msg)
+                }
+            }
         }
     }
 
     if (showPlayer) {
+        val playerState by player.state.collectAsStateWithLifecycle()
         FullScreenPlayerSheet(
             state = playerState,
             player = player,
             onDismiss = { showPlayer = false }
         )
+    }
+}
+
+@Composable
+private fun AppBottomBar(
+    tab: Tab,
+    onTabSelected: (Tab) -> Unit,
+    player: PlayerViewModel,
+    onOpenPlayer: () -> Unit
+) {
+    val playerState by player.state.collectAsStateWithLifecycle()
+    Column {
+        if (playerState.song != null) {
+            MiniPlayerBar(
+                state = playerState,
+                onTogglePlay = player::togglePlay,
+                onNext = player::next,
+                onToggleShuffle = player::toggleShuffle,
+                onCycleRepeat = player::cycleRepeat,
+                onOpenPlayer = onOpenPlayer
+            )
+        }
+        NavigationBar(
+            containerColor = Surface,
+            tonalElevation = 0.dp
+        ) {
+            Tab.entries.forEach { item ->
+                NavigationBarItem(
+                    selected = tab == item,
+                    onClick = { onTabSelected(item) },
+                    icon = { Icon(tabIcon(item), item.label) },
+                    label = { Text(item.label) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Night,
+                        selectedTextColor = Cream,
+                        indicatorColor = Cream,
+                        unselectedIconColor = MutedCream,
+                        unselectedTextColor = MutedCream
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -292,7 +310,10 @@ private fun SongsPage(
 
     val filtered = remember(songs, query) {
         if (query.isBlank()) songs
-        else songs.filter { "${it.title} ${it.artist} ${it.album}".contains(query, ignoreCase = true) }
+        else songs.filter { 
+            it.title.contains(query, ignoreCase = true) || 
+            it.artist.contains(query, ignoreCase = true) 
+        }
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.ScreenPadding)) {
@@ -304,7 +325,7 @@ private fun SongsPage(
                 value = query,
                 onValueChange = onQuery,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Parça, sanatçı veya albüm ara") },
+                placeholder = { Text("Parça veya sanatçı ara") },
                 leadingIcon = { Icon(Icons.Outlined.Search, null, tint = MutedCream) },
                 singleLine = true,
                 shape = RlsShapes.medium,
@@ -329,21 +350,29 @@ private fun SongsPage(
         }
 
         if (scanning) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth(),
-                color = Cream,
-                trackColor = SurfaceSelected
-            )
+            Box(Modifier.fillMaxWidth().height(4.dp)) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Cream,
+                    trackColor = SurfaceSelected
+                )
+            }
         }
 
         if (filtered.isEmpty() && !scanning) {
             EmptyView(
                 title = if (songs.isEmpty()) "Müzik Bulunamadı" else "Sonuç Yok",
-                message = if (songs.isEmpty()) "Cihazında kayıtlı ses dosyası bulunamadı. Ayarlar'dan yeniden tarayabilirsin." else "'$query' aramasıyla eşleşen parça yok."
+                message = if (songs.isEmpty()) "Cihazında kayıtlı ses dosyası bulunamadı." else "'$query' ile eşleşen parça yok."
             )
         } else {
-            LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-                itemsIndexed(filtered, key = { _, s -> s.id }) { index, song ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                itemsIndexed(
+                    items = filtered,
+                    key = { _, song -> song.id }
+                ) { index, song ->
                     SongRowItem(
                         song = song,
                         isPlaying = song.id == playingSongId,
@@ -1105,7 +1134,7 @@ private fun SettingsScreen(
         Text("Hakkında", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "RLS Player v1.0.0\nTamamen yerel, offline-first müzik deneyimi.\nInter yazı tipi SIL Open Font License ile lisanslanmıştır.",
+            "RLS Player v2.5.0\nTamamen yerel, offline-first müzik deneyimi.\nInter yazı tipi SIL Open Font License ile lisanslanmıştır.",
             color = MutedCream
         )
     }
